@@ -6,22 +6,74 @@ import { RootProvider } from "./rootProvider";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return {
-    title: minikitConfig.miniapp.name,
-    description: minikitConfig.miniapp.description,
-    other: {
-      "fc:frame": JSON.stringify({
-        version: minikitConfig.miniapp.version,
-        imageUrl: minikitConfig.miniapp.heroImageUrl,
-        button: {
-          title: `Join the ${minikitConfig.miniapp.name} Waitlist`,
-          action: {
-            name: `Launch ${minikitConfig.miniapp.name}`,
-            type: "launch_frame",
-          },
-        },
-      }),
+  const { miniapp } = minikitConfig;
+  const canonicalUrl = miniapp.canonicalDomain
+    ? `https://${miniapp.canonicalDomain}`
+    : miniapp.homeUrl;
+  const metadataBase = canonicalUrl.startsWith("http")
+    ? new URL(canonicalUrl)
+    : undefined;
+  const title = miniapp.ogTitle || `${miniapp.name} • Live Odds & Stream`;
+  const description = miniapp.ogDescription || miniapp.description;
+  const imageUrl = miniapp.ogImageUrl || miniapp.heroImageUrl || miniapp.iconUrl;
+
+  const frameButtons = [
+    {
+      title: "Watch live stream",
+      target: canonicalUrl,
     },
+    {
+      title: "View live odds",
+      target: `${canonicalUrl}#odds`,
+    },
+  ];
+
+  const frameMetadata = frameButtons.reduce<Record<string, string>>(
+    (acc, button, index) => {
+      const ordinal = index + 1;
+      acc[`fc:frame:button:${ordinal}`] = button.title;
+      acc[`fc:frame:button:${ordinal}:action`] = "launch_frame";
+      acc[`fc:frame:button:${ordinal}:target`] = button.target;
+      return acc;
+    },
+    {
+      "fc:frame": "vNext",
+      "fc:frame:image": imageUrl,
+      "fc:frame:post_url": canonicalUrl,
+      "fc:frame:state": JSON.stringify({ view: "live" }),
+    }
+  );
+
+  return {
+    metadataBase,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    title,
+    description,
+    openGraph: {
+      type: "website",
+      url: canonicalUrl,
+      title,
+      description,
+      images: imageUrl
+        ? [
+            {
+              url: imageUrl,
+              width: 1200,
+              height: 630,
+              alt: `${miniapp.name} hero`,
+            },
+          ]
+        : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: imageUrl ? [imageUrl] : undefined,
+    },
+    other: frameMetadata,
   };
 }
 

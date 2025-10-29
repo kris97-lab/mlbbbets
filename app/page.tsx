@@ -1,5 +1,3 @@
-"use client";
-
 import MiniApp from "./mini/MiniApp";
 
 export const revalidate = 0;

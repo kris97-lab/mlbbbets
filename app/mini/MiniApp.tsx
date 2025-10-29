@@ -14,7 +14,7 @@ import styles from "./mini.module.css";
 export function MiniApp() {
   const { setFrameReady, isFrameReady, context } = useMiniKit();
   const { address, isConnecting, isConnected } = useAccount();
-  const { connect, connectors, status: connectStatus, error: connectError } = useConnect();
+  const { connectAsync, connectors, status: connectStatus, error: connectError } = useConnect();
   const { disconnect } = useDisconnect();
   const { teamAName, teamBName, formattedOdds, isStreaming, lastUpdated, error, placeBet } =
     useOddsFeed();
@@ -176,16 +176,23 @@ export function MiniApp() {
     return "Connect wallet";
   }, [isConnectPending, isPreparingMiniAppWallet, preferredConnector]);
 
-  const handleConnect = useCallback(() => {
+  const handleConnect = useCallback(async () => {
     if (!preferredConnector || isConnectPending || isPreparingMiniAppWallet) {
       return;
     }
 
     setConnectErrorMessage(null);
-    connect({ connector: preferredConnector }).catch((err) => {
+    try {
+      await connectAsync({ connector: preferredConnector });
+    } catch (err) {
       console.error("Wallet connect failed", err);
-    });
-  }, [connect, preferredConnector, isConnectPending, isPreparingMiniAppWallet]);
+    }
+  }, [
+    connectAsync,
+    preferredConnector,
+    isConnectPending,
+    isPreparingMiniAppWallet,
+  ]);
 
   useEffect(() => {
     if (!isFrameReady) {

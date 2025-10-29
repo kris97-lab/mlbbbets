@@ -1,7 +1,7 @@
 const DEFAULT_ROOT_URL =
   process.env.NODE_ENV === "development"
     ? "http://localhost:3000"
-    : "https://mlbbbets.vercel.app";
+    : "https://mlbbbets-git-codex-implement-mini-a-28a7b9-kris97-labs-projects.vercel.app";
 
 const ROOT_URL =
   process.env.NEXT_PUBLIC_URL ||
@@ -22,9 +22,10 @@ export const minikitConfig = {
   },
   miniapp: {
     version: "1",
-    name: "Cubey", 
-    subtitle: "Your AI Ad Companion", 
-    description: "Watch the live stream and wager on real-time odds.",
+    name: "MLBB Bets",
+    subtitle: "Live Mobile Legends wagers",
+    description:
+      "Stream Mobile Legends matches and bet on shifting odds without leaving Farcaster.",
     screenshotUrls: [`${ROOT_URL}/screenshot-portrait.png`],
     iconUrl: `${ROOT_URL}/blue-icon.png`,
     splashImageUrl: `${ROOT_URL}/blue-hero.png`,
@@ -32,12 +33,15 @@ export const minikitConfig = {
     homeUrl: ROOT_URL,
     webhookUrl: `${ROOT_URL}/api/webhook`,
     primaryCategory: "social",
-    tags: ["live", "betting", "streaming", "sports"],
-    heroImageUrl: `${ROOT_URL}/blue-hero.png`, 
-    tagline: "",
-    ogTitle: "",
-    ogDescription: "",
+    tags: ["live", "betting", "streaming", "sports", "mobile-legends"],
+    heroImageUrl: `${ROOT_URL}/blue-hero.png`,
+    tagline: "Real-time odds for every fight.",
+    ogTitle: "MLBB Bets • Live odds while you watch",
+    ogDescription:
+      "Tap into the Mobile Legends stream, follow the market, and stake on every momentum swing.",
     ogImageUrl: `${ROOT_URL}/blue-hero.png`,
+    canonicalDomain:
+      "mlbbbets-git-codex-implement-mini-a-28a7b9-kris97-labs-projects.vercel.app",
   },
 } as const;
 

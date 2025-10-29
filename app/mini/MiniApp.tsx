@@ -3,8 +3,8 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMiniKit } from "@coinbase/onchainkit/minikit";
-import { ConnectWallet } from "@coinbase/onchainkit/wallet";
-import { useAccount, useDisconnect } from "wagmi";
+import MiniAppSDK from "@farcaster/miniapp-sdk";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { LiveStream } from "./LiveStream";
 import { OddsBar } from "./OddsBar";
 import { BetButtons } from "./BetButtons";
@@ -14,12 +14,15 @@ import styles from "./mini.module.css";
 export function MiniApp() {
   const { setFrameReady, isFrameReady, context } = useMiniKit();
   const { address, isConnecting, isConnected } = useAccount();
+  const { connect, connectors, status: connectStatus, error: connectError } = useConnect();
   const { disconnect } = useDisconnect();
   const { teamAName, teamBName, formattedOdds, isStreaming, lastUpdated, error, placeBet } =
     useOddsFeed();
   const farcasterUser = context?.user ?? null;
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
+  const [isInMiniApp, setIsInMiniApp] = useState<boolean | null>(null);
+  const [connectErrorMessage, setConnectErrorMessage] = useState<string | null>(null);
 
   const profileAvatarUrl = farcasterUser?.pfpUrl || null;
   const profileName = useMemo(() => {
@@ -97,6 +100,94 @@ export function MiniApp() {
   }, [disconnect]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const detectMiniApp = async () => {
+      try {
+        const result = await MiniAppSDK.isInMiniApp();
+        if (!cancelled) {
+          setIsInMiniApp(result);
+        }
+      } catch (err) {
+        console.error("Mini App detection failed", err);
+        if (!cancelled) {
+          setIsInMiniApp(false);
+        }
+      }
+    };
+
+    void detectMiniApp();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!connectError) {
+      setConnectErrorMessage(null);
+      return;
+    }
+
+    if (connectError instanceof Error) {
+      if (/request timed out/i.test(connectError.message)) {
+        setConnectErrorMessage(
+          "Farcaster wallet took too long to respond. Please try again or reopen the mini app."
+        );
+        return;
+      }
+
+      setConnectErrorMessage(connectError.message);
+      return;
+    }
+
+    setConnectErrorMessage("Wallet connection failed");
+  }, [connectError]);
+
+  const farcasterConnector = useMemo(
+    () => connectors.find((candidate) => candidate.id === "farcaster"),
+    [connectors]
+  );
+
+  const preferredConnector = useMemo(() => {
+    if (farcasterConnector) {
+      return farcasterConnector;
+    }
+
+    return connectors[0] ?? null;
+  }, [connectors, farcasterConnector]);
+
+  const isPreparingMiniAppWallet = isInMiniApp === true && !farcasterConnector;
+  const isConnectPending = isConnecting || connectStatus === "pending";
+
+  const connectButtonLabel = useMemo(() => {
+    if (isConnectPending) {
+      return "Connecting…";
+    }
+
+    if (isPreparingMiniAppWallet) {
+      return "Preparing wallet…";
+    }
+
+    if (!preferredConnector) {
+      return "Loading wallets…";
+    }
+
+    return "Connect wallet";
+  }, [isConnectPending, isPreparingMiniAppWallet, preferredConnector]);
+
+  const handleConnect = useCallback(() => {
+    if (!preferredConnector || isConnectPending || isPreparingMiniAppWallet) {
+      return;
+    }
+
+    setConnectErrorMessage(null);
+    connect({ connector: preferredConnector }).catch((err) => {
+      console.error("Wallet connect failed", err);
+    });
+  }, [connect, preferredConnector, isConnectPending, isPreparingMiniAppWallet]);
+
+  useEffect(() => {
     if (!isFrameReady) {
       void setFrameReady();
     }
@@ -114,11 +205,25 @@ export function MiniApp() {
               instant bets without leaving the match.
             </p>
             <div className={styles.gatedButtonWrapper}>
-              <ConnectWallet
+              <button
+                type="button"
                 className={styles.gatedButton}
-                disconnectedLabel={isConnecting ? "Connecting…" : "Connect wallet"}
-              />
+                onClick={handleConnect}
+                disabled={
+                  !preferredConnector || isConnectPending || isPreparingMiniAppWallet || isConnecting
+                }
+              >
+                {connectButtonLabel}
+              </button>
             </div>
+            {isPreparingMiniAppWallet ? (
+              <p className={styles.gatedStatus}>Waiting for Farcaster to hand off your wallet…</p>
+            ) : null}
+            {connectErrorMessage ? (
+              <p className={styles.gatedError} role="alert">
+                {connectErrorMessage}
+              </p>
+            ) : null}
           </div>
         </div>
       </main>

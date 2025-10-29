@@ -1,6 +1,13 @@
+const DEFAULT_ROOT_URL =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:3000"
+    : "https://mlbbbets.vercel.app";
+
 const ROOT_URL =
   process.env.NEXT_PUBLIC_URL ||
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000');
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : DEFAULT_ROOT_URL);
 
 /**
  * MiniApp configuration object. Must follow the Farcaster MiniApp specification.

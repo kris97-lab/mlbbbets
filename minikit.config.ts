@@ -1,6 +1,13 @@
+const DEFAULT_ROOT_URL =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:3000"
+    : "https://mlbbbets.vercel.app";
+
 const ROOT_URL =
   process.env.NEXT_PUBLIC_URL ||
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000');
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : DEFAULT_ROOT_URL);
 
 /**
  * MiniApp configuration object. Must follow the Farcaster MiniApp specification.
@@ -15,9 +22,10 @@ export const minikitConfig = {
   },
   miniapp: {
     version: "1",
-    name: "Cubey", 
-    subtitle: "Your AI Ad Companion", 
-    description: "Ads",
+    name: "MLBB Bets",
+    subtitle: "Live Mobile Legends wagers",
+    description:
+      "Stream Mobile Legends matches and bet on shifting odds without leaving Farcaster.",
     screenshotUrls: [`${ROOT_URL}/screenshot-portrait.png`],
     iconUrl: `${ROOT_URL}/blue-icon.png`,
     splashImageUrl: `${ROOT_URL}/blue-hero.png`,
@@ -25,12 +33,14 @@ export const minikitConfig = {
     homeUrl: ROOT_URL,
     webhookUrl: `${ROOT_URL}/api/webhook`,
     primaryCategory: "social",
-    tags: ["marketing", "ads", "quickstart", "waitlist"],
-    heroImageUrl: `${ROOT_URL}/blue-hero.png`, 
-    tagline: "",
-    ogTitle: "",
-    ogDescription: "",
+    tags: ["live", "betting", "streaming", "sports", "mobile-legends"],
+    heroImageUrl: `${ROOT_URL}/blue-hero.png`,
+    tagline: "Live odds every MLBB fight",
+    ogTitle: "MLBB Bets Live Odds",
+    ogDescription:
+      "Tap into the Mobile Legends stream, follow the market, and stake on every momentum swing.",
     ogImageUrl: `${ROOT_URL}/blue-hero.png`,
+    canonicalDomain: "mlbbbets.vercel.app",
   },
 } as const;
 

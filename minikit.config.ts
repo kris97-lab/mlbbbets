@@ -35,8 +35,8 @@ export const minikitConfig = {
     primaryCategory: "social",
     tags: ["live", "betting", "streaming", "sports", "mobile-legends"],
     heroImageUrl: `${ROOT_URL}/blue-hero.png`,
-    tagline: "Real-time odds for every fight.",
-    ogTitle: "MLBB Bets • Live odds while you watch",
+    tagline: "Live odds every MLBB fight",
+    ogTitle: "MLBB Bets Live Odds",
     ogDescription:
       "Tap into the Mobile Legends stream, follow the market, and stake on every momentum swing.",
     ogImageUrl: `${ROOT_URL}/blue-hero.png`,

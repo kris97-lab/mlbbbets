@@ -15,9 +15,12 @@ const DEFAULT_PLATFORM = (process.env.NEXT_PUBLIC_STREAM_PLATFORM || "youtube") 
   | "youtube"
   | "twitch"
   | "iframe";
-const DEFAULT_YOUTUBE_ID = process.env.NEXT_PUBLIC_STREAM_YOUTUBE_ID || "dQw4w9WgXcQ";
+const DEFAULT_YOUTUBE_ID = process.env.NEXT_PUBLIC_STREAM_YOUTUBE_ID || "26RsRS6L-bQ";
 const DEFAULT_TWITCH_CHANNEL = process.env.NEXT_PUBLIC_STREAM_TWITCH_CHANNEL || "riotgames";
 const DEFAULT_IFRAME_SRC = process.env.NEXT_PUBLIC_STREAM_IFRAME_URL;
+const DEFAULT_TITLE = process.env.NEXT_PUBLIC_STREAM_TITLE || "Cubey Live Stream";
+const DEFAULT_SUBTITLE =
+  process.env.NEXT_PUBLIC_STREAM_SUBTITLE || "Watch the action and place your bets in real time";
 
 const buildStreamSrc = (props: LiveStreamProps) => {
   const platform = props.platform || DEFAULT_PLATFORM;
@@ -40,8 +43,8 @@ export function LiveStream({
   youtubeId,
   twitchChannel,
   iframeSrc,
-  title = "Worlds Championship - Day 5",
-  subtitle = "Live now · Presented by MiniKit",
+  title = DEFAULT_TITLE,
+  subtitle = DEFAULT_SUBTITLE,
 }: LiveStreamProps) {
   const streamSrc = buildStreamSrc({ platform, youtubeId, twitchChannel, iframeSrc });
 

@@ -1,5 +1,7 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import MiniAppPage from "./mini/page";
 
 export default function Home() {
-  redirect("/mini");
+  return <MiniAppPage />;
 }

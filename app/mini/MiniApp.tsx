@@ -14,7 +14,13 @@ import styles from "./mini.module.css";
 export function MiniApp() {
   const { setFrameReady, isFrameReady, context } = useMiniKit();
   const { address, isConnecting, isConnected } = useAccount();
-  const { connectAsync, connectors, status: connectStatus, error: connectError } = useConnect();
+  const {
+    connectAsync,
+    connect,
+    connectors,
+    status: connectStatus,
+    error: connectError,
+  } = useConnect();
   const { disconnect } = useDisconnect();
   const { teamAName, teamBName, formattedOdds, isStreaming, lastUpdated, error, placeBet } =
     useOddsFeed();
@@ -23,6 +29,8 @@ export function MiniApp() {
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const [isInMiniApp, setIsInMiniApp] = useState<boolean | null>(null);
   const [connectErrorMessage, setConnectErrorMessage] = useState<string | null>(null);
+  const [hasRequestedMiniAppProvider, setHasRequestedMiniAppProvider] = useState(false);
+  const [hasAttemptedMiniAppAutoconnect, setHasAttemptedMiniAppAutoconnect] = useState(false);
 
   const profileAvatarUrl = farcasterUser?.pfpUrl || null;
   const profileName = useMemo(() => {
@@ -145,7 +153,7 @@ export function MiniApp() {
   }, [connectError]);
 
   const farcasterConnector = useMemo(
-    () => connectors.find((candidate) => candidate.id === "farcaster"),
+    () => connectors.find((candidate) => candidate.id === "farcaster") ?? null,
     [connectors]
   );
 
@@ -172,12 +180,22 @@ export function MiniApp() {
       return "Preparing wallet…";
     }
 
+    if (isInMiniApp && farcasterConnector) {
+      return "Continue with Farcaster wallet";
+    }
+
     if (!preferredConnector) {
       return "Loading wallets…";
     }
 
     return "Connect wallet";
-  }, [isConnectPending, isPreparingMiniAppWallet, preferredConnector]);
+  }, [
+    farcasterConnector,
+    isConnectPending,
+    isInMiniApp,
+    isPreparingMiniAppWallet,
+    preferredConnector,
+  ]);
 
   const handleConnect = useCallback(async () => {
     if (!preferredConnector || isConnectPending || isPreparingMiniAppWallet) {
@@ -195,6 +213,47 @@ export function MiniApp() {
     preferredConnector,
     isConnectPending,
     isPreparingMiniAppWallet,
+  ]);
+
+  useEffect(() => {
+    if (hasRequestedMiniAppProvider || isInMiniApp !== true) {
+      return;
+    }
+
+    setHasRequestedMiniAppProvider(true);
+
+    void MiniAppSDK.wallet
+      .getEthereumProvider()
+      .catch((err) => console.error("Failed to warm up Farcaster provider", err));
+  }, [hasRequestedMiniAppProvider, isInMiniApp]);
+
+  useEffect(() => {
+    if (
+      !farcasterConnector ||
+      isInMiniApp !== true ||
+      hasAttemptedMiniAppAutoconnect ||
+      isConnected ||
+      isConnecting ||
+      connectStatus === "pending"
+    ) {
+      return;
+    }
+
+    try {
+      connect({ connector: farcasterConnector });
+    } catch (err) {
+      console.error("Auto Farcaster connect failed", err);
+    } finally {
+      setHasAttemptedMiniAppAutoconnect(true);
+    }
+  }, [
+    connect,
+    connectStatus,
+    farcasterConnector,
+    hasAttemptedMiniAppAutoconnect,
+    isConnected,
+    isConnecting,
+    isInMiniApp,
   ]);
 
   useEffect(() => {

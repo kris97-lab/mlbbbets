@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMiniKit } from "@coinbase/onchainkit/minikit";
 import { ConnectWallet } from "@coinbase/onchainkit/wallet";
-import { useAccount } from "wagmi";
+import { useAccount, useDisconnect } from "wagmi";
 import { LiveStream } from "./LiveStream";
 import { OddsBar } from "./OddsBar";
 import { BetButtons } from "./BetButtons";
@@ -14,9 +14,12 @@ import styles from "./mini.module.css";
 export function MiniApp() {
   const { setFrameReady, isFrameReady, context } = useMiniKit();
   const { address, isConnecting, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
   const { teamAName, teamBName, formattedOdds, isStreaming, lastUpdated, error, placeBet } =
     useOddsFeed();
   const farcasterUser = context?.user ?? null;
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const profileAvatarUrl = farcasterUser?.pfpUrl || null;
   const profileName = useMemo(() => {
@@ -48,6 +51,52 @@ export function MiniApp() {
   }, [address, farcasterUser]);
 
   useEffect(() => {
+    if (!isProfileMenuOpen) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!profileMenuRef.current) {
+        return;
+      }
+
+      const target = event.target;
+      if (target instanceof Node && !profileMenuRef.current.contains(target)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isProfileMenuOpen]);
+
+  useEffect(() => {
+    if (!isConnected && isProfileMenuOpen) {
+      setIsProfileMenuOpen(false);
+    }
+  }, [isConnected, isProfileMenuOpen]);
+
+  const handleProfileToggle = useCallback(() => {
+    setIsProfileMenuOpen((prev) => !prev);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    setIsProfileMenuOpen(false);
+    disconnect();
+  }, [disconnect]);
+
+  useEffect(() => {
     if (!isFrameReady) {
       void setFrameReady();
     }
@@ -55,7 +104,7 @@ export function MiniApp() {
 
   if (!isConnected) {
     return (
-      <main className={`${styles.wrapper} ${styles.gated}`}> 
+      <main className={`${styles.wrapper} ${styles.gated}`}>
         <div className={styles.gatedContent}>
           <div className={styles.gatedCard}>
             <p className={styles.gatedBadge}>Live MLBB Bets</p>
@@ -64,10 +113,12 @@ export function MiniApp() {
               Link your Farcaster wallet to join the live stream, track odds in real time, and place
               instant bets without leaving the match.
             </p>
-            <ConnectWallet
-              className={styles.gatedButton}
-              disconnectedLabel={isConnecting ? "Connecting…" : "Connect wallet"}
-            />
+            <div className={styles.gatedButtonWrapper}>
+              <ConnectWallet
+                className={styles.gatedButton}
+                disconnectedLabel={isConnecting ? "Connecting…" : "Connect wallet"}
+              />
+            </div>
           </div>
         </div>
       </main>
@@ -76,22 +127,39 @@ export function MiniApp() {
 
   return (
     <main className={styles.wrapper}>
-      <header className={styles.profileHeader} aria-label="Farcaster profile placeholder">
-        {profileAvatarUrl ? (
-          <Image
-            className={styles.profileAvatarPlaceholder}
-            src={profileAvatarUrl}
-            alt="Farcaster avatar"
-            width={52}
-            height={52}
-            unoptimized
-          />
-        ) : (
-          <div className={styles.profileAvatarPlaceholder} aria-hidden="true" />
-        )}
-        <div className={styles.profileText}>
-          <span className={styles.profileName}>{profileName}</span>
-          <span className={styles.profileHint}>{profileHandle}</span>
+      <header className={styles.profileHeader} aria-label="Farcaster profile">
+        <div className={styles.profileInfo} ref={profileMenuRef}>
+          <button
+            type="button"
+            className={styles.profileButton}
+            onClick={handleProfileToggle}
+            aria-haspopup="menu"
+            aria-expanded={isProfileMenuOpen}
+          >
+            {profileAvatarUrl ? (
+              <Image
+                className={styles.profileAvatarPlaceholder}
+                src={profileAvatarUrl}
+                alt="Farcaster avatar"
+                width={52}
+                height={52}
+                unoptimized
+              />
+            ) : (
+              <div className={styles.profileAvatarPlaceholder} aria-hidden="true" />
+            )}
+            <div className={styles.profileText}>
+              <span className={styles.profileName}>{profileName}</span>
+              <span className={styles.profileHint}>{profileHandle}</span>
+            </div>
+          </button>
+          {isProfileMenuOpen ? (
+            <div className={styles.profileMenu} role="menu">
+              <button type="button" className={styles.profileMenuItem} onClick={handleLogout}>
+                Log out
+              </button>
+            </div>
+          ) : null}
         </div>
       </header>
       <LiveStream />

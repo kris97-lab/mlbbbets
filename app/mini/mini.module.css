@@ -57,9 +57,14 @@
   color: rgba(255, 255, 255, 0.72);
 }
 
+.gatedButtonWrapper {
+  display: flex;
+  justify-content: center;
+}
+
 .gatedButton {
   margin-top: 12px;
-  align-self: center;
+  display: inline-flex;
 }
 
 .profileHeader {
@@ -70,6 +75,37 @@
   padding: clamp(16px, 3vw, 28px);
   padding-bottom: 8px;
   min-height: 72px;
+  justify-content: flex-end;
+}
+
+.profileInfo {
+  position: relative;
+  display: inline-flex;
+}
+
+.profileButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 12, 29, 0.6);
+  color: inherit;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.profileButton:hover,
+.profileButton:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.24);
+  transform: translateY(-1px);
+}
+
+.profileButton:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
 }
 
 .profileAvatarPlaceholder {
@@ -98,6 +134,48 @@
 .profileHint {
   font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.6);
+}
+
+.profileMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(12, 12, 29, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 28px rgba(5, 5, 16, 0.65);
+  z-index: 20;
+  gap: 6px;
+}
+
+.profileMenuItem {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.profileMenuItem:hover,
+.profileMenuItem:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.profileMenuItem:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
 }
 
 .streamContainer {

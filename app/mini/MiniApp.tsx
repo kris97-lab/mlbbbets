@@ -149,6 +149,8 @@ export function MiniApp() {
     [connectors]
   );
 
+  const hasConnectors = connectors.length > 0;
+
   const preferredConnector = useMemo(() => {
     if (farcasterConnector) {
       return farcasterConnector;
@@ -157,7 +159,8 @@ export function MiniApp() {
     return connectors[0] ?? null;
   }, [connectors, farcasterConnector]);
 
-  const isPreparingMiniAppWallet = isInMiniApp === true && !farcasterConnector;
+  const isPreparingMiniAppWallet =
+    isInMiniApp === true && !farcasterConnector && !hasConnectors;
   const isConnectPending = isConnecting || connectStatus === "pending";
 
   const connectButtonLabel = useMemo(() => {

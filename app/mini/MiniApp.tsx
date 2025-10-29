@@ -8,22 +8,40 @@ import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { LiveStream } from "./LiveStream";
 import { OddsBar } from "./OddsBar";
 import { BetButtons } from "./BetButtons";
-import { useOddsFeed } from "./useOddsFeed";
+import { PositionCard } from "./PositionCard";
+import { useOddsFeed, BetSide } from "./useOddsFeed";
 import styles from "./mini.module.css";
+import { ConnectWallet } from "@/lib/thirdweb/ConnectWallet";
 
 export function MiniApp() {
   const { setFrameReady, isFrameReady, context } = useMiniKit();
   const { address, isConnecting, isConnected } = useAccount();
-  const {
-    connectAsync,
-    connect,
-    connectors,
-    status: connectStatus,
-    error: connectError,
-  } = useConnect();
+  const { connect, connectors, status: connectStatus, error: connectError } = useConnect();
   const { disconnect } = useDisconnect();
-  const { teamAName, teamBName, formattedOdds, isStreaming, lastUpdated, error, placeBet } =
-    useOddsFeed();
+  const {
+    matchTitle,
+    matchStartTime,
+    teamAName,
+    teamBName,
+    formattedOdds,
+    isStreaming,
+    marketStatus,
+    liquidity,
+    lastUpdated,
+    userShares,
+    claimablePayout,
+    isOwner,
+    winningOutcome,
+    placeBet,
+    sellPosition,
+    resolveMarket,
+    claimWinnings,
+    isBetting,
+    isSelling,
+    isResolving,
+    isClaiming,
+    error,
+  } = useOddsFeed();
   const farcasterUser = context?.user ?? null;
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -31,6 +49,8 @@ export function MiniApp() {
   const [connectErrorMessage, setConnectErrorMessage] = useState<string | null>(null);
   const [hasRequestedMiniAppProvider, setHasRequestedMiniAppProvider] = useState(false);
   const [hasAttemptedMiniAppAutoconnect, setHasAttemptedMiniAppAutoconnect] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [adminSuccess, setAdminSuccess] = useState<string | null>(null);
 
   const profileAvatarUrl = farcasterUser?.pfpUrl || null;
   const profileName = useMemo(() => {
@@ -197,24 +217,6 @@ export function MiniApp() {
     preferredConnector,
   ]);
 
-  const handleConnect = useCallback(async () => {
-    if (!preferredConnector || isConnectPending || isPreparingMiniAppWallet) {
-      return;
-    }
-
-    setConnectErrorMessage(null);
-    try {
-      await connectAsync({ connector: preferredConnector });
-    } catch (err) {
-      console.error("Wallet connect failed", err);
-    }
-  }, [
-    connectAsync,
-    preferredConnector,
-    isConnectPending,
-    isPreparingMiniAppWallet,
-  ]);
-
   useEffect(() => {
     if (hasRequestedMiniAppProvider || isInMiniApp !== true) {
       return;
@@ -262,6 +264,21 @@ export function MiniApp() {
     }
   }, [isFrameReady, setFrameReady]);
 
+  const handleResolve = useCallback(
+    async (side: BetSide) => {
+      try {
+        setAdminError(null);
+        setAdminSuccess(null);
+        await resolveMarket(side);
+        setAdminSuccess(`Resolved in favour of ${side === "teamA" ? teamAName : teamBName}`);
+      } catch (err) {
+        setAdminSuccess(null);
+        setAdminError(err instanceof Error ? err.message : "Unable to resolve market");
+      }
+    },
+    [resolveMarket, teamAName, teamBName]
+  );
+
   if (!isConnected) {
     return (
       <main className={`${styles.wrapper} ${styles.gated}`}>
@@ -274,16 +291,7 @@ export function MiniApp() {
               instant bets without leaving the match.
             </p>
             <div className={styles.gatedButtonWrapper}>
-              <button
-                type="button"
-                className={styles.gatedButton}
-                onClick={handleConnect}
-                disabled={
-                  !preferredConnector || isConnectPending || isPreparingMiniAppWallet || isConnecting
-                }
-              >
-                {connectButtonLabel}
-              </button>
+              <ConnectWallet label={connectButtonLabel} />
             </div>
             {isPreparingMiniAppWallet ? (
               <p className={styles.gatedStatus}>Waiting for Farcaster to hand off your wallet…</p>
@@ -340,10 +348,20 @@ export function MiniApp() {
 
       <div className={styles.content}>
         <OddsBar
+          matchTitle={matchTitle}
+          matchStartTime={matchStartTime}
           teamAName={teamAName}
           teamBName={teamBName}
-          percentages={{ teamA: formattedOdds.teamA.probability, teamB: formattedOdds.teamB.probability }}
-          multipliers={{ teamA: formattedOdds.teamA.multiplier, teamB: formattedOdds.teamB.multiplier }}
+          marketStatus={marketStatus}
+          liquidity={liquidity}
+          percentages={{
+            teamA: formattedOdds.teamA.probability,
+            teamB: formattedOdds.teamB.probability,
+          }}
+          multipliers={{
+            teamA: formattedOdds.teamA.multiplier,
+            teamB: formattedOdds.teamB.multiplier,
+          }}
           isStreaming={isStreaming}
           lastUpdated={lastUpdated}
         />
@@ -351,8 +369,60 @@ export function MiniApp() {
         <BetButtons
           teamAName={teamAName}
           teamBName={teamBName}
+          multipliers={{
+            teamA: formattedOdds.teamA.multiplier,
+            teamB: formattedOdds.teamB.multiplier,
+          }}
+          marketStatus={marketStatus}
+          isBetting={isBetting}
           onBet={placeBet}
         />
+
+        <PositionCard
+          teamAName={teamAName}
+          teamBName={teamBName}
+          marketStatus={marketStatus}
+          winningOutcome={winningOutcome}
+          userShares={userShares}
+          claimablePayout={claimablePayout}
+          isSelling={isSelling}
+          isClaiming={isClaiming}
+          onSell={sellPosition}
+          onClaim={claimWinnings}
+        />
+
+        {isOwner ? (
+          <section className={styles.adminCard}>
+            <header className={styles.adminHeader}>
+              <h3>Admin controls</h3>
+              <span>{isResolving ? "Resolving…" : "Set winner"}</span>
+            </header>
+            <div className={styles.adminActions}>
+              <button
+                type="button"
+                className={styles.adminButton}
+                onClick={() => void handleResolve("teamA")}
+                disabled={marketStatus !== "Active" || isResolving}
+              >
+                {isResolving ? "Processing…" : `Resolve ${teamAName}`}
+              </button>
+              <button
+                type="button"
+                className={styles.adminButton}
+                onClick={() => void handleResolve("teamB")}
+                disabled={marketStatus !== "Active" || isResolving}
+              >
+                {isResolving ? "Processing…" : `Resolve ${teamBName}`}
+              </button>
+            </div>
+            {adminError ? (
+              <p className={styles.errorMessage} role="alert">
+                {adminError}
+              </p>
+            ) : null}
+            {adminSuccess ? <p className={styles.successMessage}>{adminSuccess}</p> : null}
+          </section>
+        ) : null}
 
         {error ? <p className={styles.errorMessage}>{error}</p> : null}
       </div>

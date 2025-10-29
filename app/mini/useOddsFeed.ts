@@ -1,238 +1,404 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import MiniAppSDK from "@farcaster/miniapp-sdk";
+import { formatEther, formatUnits, parseEther } from "viem";
+import { predictionMarketAbi } from "@/lib/abi/predictionMarket";
+import {
+  useAddress,
+  useBuyShares,
+  useClaimWinnings,
+  useContract,
+  useContractRead,
+  useResolveMarket,
+  useSellShares,
+} from "@/lib/thirdweb/hooks";
+
+export type BetSide = "teamA" | "teamB";
 
 type NormalizedOdds = {
   teamA: number;
   teamB: number;
 };
 
-export type BetSide = "teamA" | "teamB";
-
-type OddsPayload = {
-  teamA: number;
-  teamB: number;
-  updatedAt?: string | number;
-};
-
-type UseOddsFeedOptions = {
-  initialOdds: NormalizedOdds;
-  teamAName: string;
-  teamBName: string;
-};
-
-const STREAM_URL = process.env.NEXT_PUBLIC_ODDS_STREAM_URL;
-const REST_URL = process.env.NEXT_PUBLIC_ODDS_REST_URL;
-const BET_ACTION_URL = process.env.NEXT_PUBLIC_BET_ACTION_URL;
-
-const clampProbability = (value: number) => {
-  if (!Number.isFinite(value)) return 0;
-  if (value < 0) return 0;
-  if (value > 1) return 1;
-  return value;
-};
-
-const normaliseOdds = (payload: OddsPayload): NormalizedOdds => {
-  const teamATotal = clampProbability(payload.teamA ?? 0);
-  const teamBTotal = clampProbability(payload.teamB ?? 0);
-  const total = teamATotal + teamBTotal;
-
-  if (total <= 0) {
-    return { teamA: 0.5, teamB: 0.5 };
-  }
-
-  return {
-    teamA: teamATotal / total,
-    teamB: teamBTotal / total,
+type FormattedOdds = {
+  teamA: {
+    probability: number;
+    multiplier: number | null;
+  };
+  teamB: {
+    probability: number;
+    multiplier: number | null;
   };
 };
 
-const probabilityToOdds = (probability: number) => {
-  const normalised = clampProbability(probability);
-  if (normalised === 0) {
-    return Infinity;
+type UserShares = {
+  teamA: number;
+  teamB: number;
+};
+
+type MarketStatus = "Active" | "Resolved" | "Unseeded";
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const WAD = 18;
+
+const defaultOdds: FormattedOdds = {
+  teamA: { probability: 50, multiplier: null },
+  teamB: { probability: 50, multiplier: null },
+};
+
+const fallbackTeamA = process.env.NEXT_PUBLIC_TEAM_A_NAME || "Team A";
+const fallbackTeamB = process.env.NEXT_PUBLIC_TEAM_B_NAME || "Team B";
+
+const resolveStatus = (statusValue: number | undefined): MarketStatus => {
+  if (statusValue === 1) {
+    return "Resolved";
   }
 
-  return 1 / normalised;
+  if (statusValue === 0) {
+    return "Active";
+  }
+
+  return "Unseeded";
 };
 
-const formatNumber = (value: number, fractionDigits = 1) =>
-  Number.parseFloat(value.toFixed(fractionDigits));
+export function useOddsFeed() {
+  const address = useAddress();
+  const contractAddress = process.env.NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS;
+  const contract = useContract(contractAddress as `0x${string}` | undefined, predictionMarketAbi);
 
-const defaultOptions: UseOddsFeedOptions = {
-  initialOdds: { teamA: 0.5, teamB: 0.5 },
-  teamAName: process.env.NEXT_PUBLIC_TEAM_A_NAME || "Team A",
-  teamBName: process.env.NEXT_PUBLIC_TEAM_B_NAME || "Team B",
-};
-
-export function useOddsFeed(options: Partial<UseOddsFeedOptions> = {}) {
-  const { initialOdds, teamAName, teamBName } = useMemo(
-    () => ({ ...defaultOptions, ...options }),
-    [options]
-  );
-  const betActionUrl = BET_ACTION_URL;
-
-  const [odds, setOdds] = useState<NormalizedOdds>(initialOdds);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const marketQuery = useContractRead(contract, "getMarket", [], {
+    watch: true,
+    refetchInterval: 12000,
+  });
+
+  const sharePriceTeamAQuery = useContractRead(contract, "getSharePrice", [0], {
+    watch: true,
+    refetchInterval: 8000,
+  });
+
+  const sharePriceTeamBQuery = useContractRead(contract, "getSharePrice", [1], {
+    watch: true,
+    refetchInterval: 8000,
+  });
+
+  const payoutMultiplierAQuery = useContractRead(contract, "getPayoutMultiplier", [0], {
+    watch: true,
+    refetchInterval: 12000,
+  });
+
+  const payoutMultiplierBQuery = useContractRead(contract, "getPayoutMultiplier", [1], {
+    watch: true,
+    refetchInterval: 12000,
+  });
+
+  const liquidityQuery = useContractRead(contract, "getLiquidity", [], {
+    watch: true,
+    refetchInterval: 15000,
+  });
+
+  const ownerQuery = useContractRead(contract, "owner", []);
+
+  const winningOutcomeQuery = useContractRead(contract, "winningOutcome", [], {
+    watch: true,
+    refetchInterval: 15000,
+  });
+
+  const claimableQuery = useContractRead(contract, "getClaimablePayout", [address ?? ZERO_ADDRESS], {
+    watch: Boolean(address),
+    enabled: Boolean(address),
+    refetchInterval: 15000,
+  });
+
+  const userSharesATeamQuery = useContractRead(contract, "getUserShares", [address ?? ZERO_ADDRESS, 0], {
+    watch: Boolean(address),
+    enabled: Boolean(address),
+    refetchInterval: 10000,
+  });
+
+  const userSharesBTeamQuery = useContractRead(contract, "getUserShares", [address ?? ZERO_ADDRESS, 1], {
+    watch: Boolean(address),
+    enabled: Boolean(address),
+    refetchInterval: 10000,
+  });
+
+  const buyShares = useBuyShares(contract);
+  const sellShares = useSellShares(contract);
+  const resolveMarketMutation = useResolveMarket(contract);
+  const claimWinningsMutation = useClaimWinnings(contract);
+
+  const marketData = marketQuery.data as
+    | {
+        matchTitle: string;
+        teamA: string;
+        teamB: string;
+        matchStartTime: bigint;
+        status: number;
+        winningOutcome: number;
+        reserveTeamA: bigint;
+        reserveTeamB: bigint;
+      }
+    | undefined;
+
+  const sharePriceTeamA = sharePriceTeamAQuery.data as bigint | undefined;
+  const sharePriceTeamB = sharePriceTeamBQuery.data as bigint | undefined;
+  const payoutMultiplierA = payoutMultiplierAQuery.data as bigint | undefined;
+  const payoutMultiplierB = payoutMultiplierBQuery.data as bigint | undefined;
+  const liquidityValue = liquidityQuery.data as bigint | undefined;
+  const userSharesATeam = (userSharesATeamQuery.data as bigint | undefined) ?? 0n;
+  const userSharesBTeam = (userSharesBTeamQuery.data as bigint | undefined) ?? 0n;
+  const claimableValue = (claimableQuery.data as bigint | undefined) ?? 0n;
+  const ownerAddress = ownerQuery.data as string | undefined;
+  const winningOutcome = winningOutcomeQuery.data as number | undefined;
 
   useEffect(() => {
-    let eventSource: EventSource | null = null;
-    let interval: NodeJS.Timeout | undefined;
-    let cancelled = false;
+    if (marketData || sharePriceTeamA || sharePriceTeamB) {
+      setLastUpdated(new Date());
+    }
+  }, [marketData, sharePriceTeamA, sharePriceTeamB]);
 
-    const hydrateFromRest = async () => {
-      if (!REST_URL) {
-        return;
-      }
+  const teamAName = marketData?.teamA || fallbackTeamA;
+  const teamBName = marketData?.teamB || fallbackTeamB;
+  const matchTitle = marketData?.matchTitle || `${teamAName} vs ${teamBName}`;
+  const matchStartTime = marketData?.matchStartTime ? new Date(Number(marketData.matchStartTime) * 1000) : null;
+  const marketStatus = resolveStatus(marketData?.status);
 
-      try {
-        const response = await fetch(REST_URL, { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch odds: ${response.status}`);
-        }
+  const liquidity = useMemo(() => {
+    if (liquidityValue !== undefined) {
+      return liquidityValue;
+    }
 
-        const payload = (await response.json()) as OddsPayload;
-        const nextOdds = normaliseOdds(payload);
-        if (!cancelled) {
-          setOdds(nextOdds);
-          setLastUpdated(payload.updatedAt ? new Date(payload.updatedAt) : new Date());
-        }
-      } catch (err) {
-        console.error("Unable to hydrate odds", err);
-        if (!cancelled) {
-          setError("Unable to fetch the latest odds. Showing live estimates.");
-        }
-      }
-    };
+    if (marketData) {
+      return marketData.reserveTeamA + marketData.reserveTeamB;
+    }
 
-    const startStream = async () => {
-      if (STREAM_URL) {
-        try {
-          eventSource = new EventSource(STREAM_URL);
-          eventSource.onopen = () => {
-            if (!cancelled) {
-              setIsStreaming(true);
-              setError(null);
-            }
-          };
+    return null;
+  }, [liquidityValue, marketData]);
 
-          eventSource.onerror = (event) => {
-            console.error("Odds stream error", event);
-            if (!cancelled) {
-              setError("Live feed temporarily unavailable. Using recent snapshot.");
-              setIsStreaming(false);
-            }
-          };
+  const liquidityFormatted = liquidity !== null && liquidity !== undefined ? formatEther(liquidity) : null;
 
-          eventSource.onmessage = (message) => {
-            try {
-              const payload = JSON.parse(message.data) as OddsPayload;
-              const nextOdds = normaliseOdds(payload);
-              if (!cancelled) {
-                setOdds(nextOdds);
-                setLastUpdated(payload.updatedAt ? new Date(payload.updatedAt) : new Date());
-              }
-            } catch (err) {
-              console.error("Malformed odds payload", err);
-            }
-          };
+  const formattedOdds: FormattedOdds = useMemo(() => {
+    if (!sharePriceTeamA || !sharePriceTeamB) {
+      return defaultOdds;
+    }
 
-          return;
-        } catch (err) {
-          console.error("Failed to open odds stream", err);
-          if (!cancelled) {
-            setError("Live feed temporarily unavailable. Using simulated data.");
-          }
-        }
-      }
-
-      setIsStreaming(false);
-      interval = setInterval(() => {
-        setOdds((previous) => {
-          const drift = (Math.random() - 0.5) * 0.08;
-          const nextA = clampProbability(previous.teamA + drift);
-          const nextOdds = normaliseOdds({ teamA: nextA, teamB: 1 - nextA });
-          setLastUpdated(new Date());
-          return nextOdds;
-        });
-      }, 2500);
-    };
-
-    void hydrateFromRest();
-    void startStream();
-    setIsLoading(false);
-
-    return () => {
-      cancelled = true;
-      if (eventSource) {
-        eventSource.close();
-      }
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, []);
-
-  const formattedOdds = useMemo(() => {
-    const toMultiplier = (probability: number) => {
-      const multiplier = probabilityToOdds(probability);
-      return Number.isFinite(multiplier) ? formatNumber(multiplier, 2) : null;
-    };
+    const probabilityA = Number(formatUnits(sharePriceTeamA, WAD)) * 100;
+    const probabilityB = Number(formatUnits(sharePriceTeamB, WAD)) * 100;
+    const multiplierA = payoutMultiplierA ? Number(formatUnits(payoutMultiplierA, WAD)) : null;
+    const multiplierB = payoutMultiplierB ? Number(formatUnits(payoutMultiplierB, WAD)) : null;
 
     return {
       teamA: {
-        probability: formatNumber(odds.teamA * 100, 1),
-        multiplier: toMultiplier(odds.teamA),
+        probability: Number.isFinite(probabilityA) ? probabilityA : defaultOdds.teamA.probability,
+        multiplier: multiplierA,
       },
       teamB: {
-        probability: formatNumber(odds.teamB * 100, 1),
-        multiplier: toMultiplier(odds.teamB),
+        probability: Number.isFinite(probabilityB) ? probabilityB : defaultOdds.teamB.probability,
+        multiplier: multiplierB,
       },
     };
-  }, [odds]);
+  }, [payoutMultiplierA, payoutMultiplierB, sharePriceTeamA, sharePriceTeamB]);
 
-  const placeBet = useCallback(
-    async (side: BetSide) => {
-      if (!betActionUrl) {
-        throw new Error("Missing NEXT_PUBLIC_BET_ACTION_URL environment variable");
-      }
+  const odds: NormalizedOdds = useMemo(() => {
+    const totalProbability = formattedOdds.teamA.probability + formattedOdds.teamB.probability;
+    if (!Number.isFinite(totalProbability) || totalProbability <= 0) {
+      return { teamA: 0.5, teamB: 0.5 };
+    }
 
-      const url = new URL(betActionUrl);
-      url.searchParams.set("side", side === "teamA" ? teamAName : teamBName);
-      url.searchParams.set(
-        "impliedProbability",
-        (side === "teamA" ? odds.teamA : odds.teamB).toString()
-      );
+    return {
+      teamA: formattedOdds.teamA.probability / totalProbability,
+      teamB: formattedOdds.teamB.probability / totalProbability,
+    };
+  }, [formattedOdds]);
 
-      try {
-        const isInMiniApp = await MiniAppSDK.isInMiniApp();
-        if (isInMiniApp) {
-          await MiniAppSDK.actions.openUrl(url.toString());
-        } else if (typeof window !== "undefined") {
-          window.open(url.toString(), "_blank", "noopener,noreferrer");
-        } else {
-          throw new Error("Unable to open action outside of the Mini App context");
-        }
-      } catch (err) {
-        throw err instanceof Error ? err : new Error("Action request was cancelled");
-      }
-    },
-    [betActionUrl, odds.teamA, odds.teamB, teamAName, teamBName]
+  const userShares: UserShares = useMemo(
+    () => ({
+      teamA: Number(formatUnits(userSharesATeam, WAD)),
+      teamB: Number(formatUnits(userSharesBTeam, WAD)),
+    }),
+    [userSharesATeam, userSharesBTeam]
   );
 
+  const claimablePayout = Number(formatEther(claimableValue));
+
+  const refetchAll = useCallback(async () => {
+    await Promise.all([
+      marketQuery.refetch?.(),
+      sharePriceTeamAQuery.refetch?.(),
+      sharePriceTeamBQuery.refetch?.(),
+      payoutMultiplierAQuery.refetch?.(),
+      payoutMultiplierBQuery.refetch?.(),
+      liquidityQuery.refetch?.(),
+      userSharesATeamQuery.refetch?.(),
+      userSharesBTeamQuery.refetch?.(),
+      claimableQuery.refetch?.(),
+      winningOutcomeQuery.refetch?.(),
+    ]);
+    setLastUpdated(new Date());
+  }, [
+    claimableQuery,
+    liquidityQuery,
+    marketQuery,
+    payoutMultiplierAQuery,
+    payoutMultiplierBQuery,
+    sharePriceTeamAQuery,
+    sharePriceTeamBQuery,
+    userSharesATeamQuery,
+    userSharesBTeamQuery,
+    winningOutcomeQuery,
+  ]);
+
+  const placeBet = useCallback(
+    async (side: BetSide, amount: string) => {
+      if (!contract) {
+        throw new Error("Prediction market is not configured");
+      }
+
+      if (!address) {
+        throw new Error("Connect your wallet to place a bet");
+      }
+
+      if (!amount || Number.parseFloat(amount) <= 0) {
+        throw new Error("Enter an amount greater than zero");
+      }
+
+      const value = parseEther(amount);
+
+      setActionError(null);
+      try {
+        await buyShares.mutateAsync({
+          outcome: side === "teamA" ? 0 : 1,
+          minSharesOut: 0n,
+          value,
+        });
+        await refetchAll();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to place bet";
+        setActionError(message);
+        throw new Error(message);
+      }
+    },
+    [address, buyShares, contract, refetchAll]
+  );
+
+  const sellPosition = useCallback(
+    async (side: BetSide) => {
+      if (!contract) {
+        throw new Error("Prediction market is not configured");
+      }
+
+      if (!address) {
+        throw new Error("Connect your wallet to manage your position");
+      }
+
+      const balance = side === "teamA" ? userSharesATeam : userSharesBTeam;
+      if (!balance || balance === 0n) {
+        throw new Error("No shares available to sell");
+      }
+
+      setActionError(null);
+      try {
+        await sellShares.mutateAsync({
+          outcome: side === "teamA" ? 0 : 1,
+          sharesAmount: balance,
+          minAmountOut: 0n,
+        });
+        await refetchAll();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to sell shares";
+        setActionError(message);
+        throw new Error(message);
+      }
+    },
+    [address, contract, refetchAll, sellShares, userSharesATeam, userSharesBTeam]
+  );
+
+  const resolveMarket = useCallback(
+    async (side: BetSide) => {
+      if (!contract) {
+        throw new Error("Prediction market is not configured");
+      }
+
+      if (marketStatus !== "Active") {
+        throw new Error("Market has already been resolved");
+      }
+
+      setActionError(null);
+      try {
+        await resolveMarketMutation.mutateAsync({ winningOutcome: side === "teamA" ? 0 : 1 });
+        await refetchAll();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to resolve market";
+        setActionError(message);
+        throw new Error(message);
+      }
+    },
+    [contract, marketStatus, refetchAll, resolveMarketMutation]
+  );
+
+  const claimWinnings = useCallback(async () => {
+    if (!contract) {
+      throw new Error("Prediction market is not configured");
+    }
+
+    if (!address) {
+      throw new Error("Connect your wallet to claim winnings");
+    }
+
+    if (claimableValue <= 0n) {
+      throw new Error("No winnings available yet");
+    }
+
+    setActionError(null);
+    try {
+      await claimWinningsMutation.mutateAsync({});
+      await refetchAll();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to claim winnings";
+      setActionError(message);
+      throw new Error(message);
+    }
+  }, [address, claimWinningsMutation, claimableValue, contract, refetchAll]);
+
+  const combinedError = useMemo(() => {
+    if (!contractAddress) {
+      return "Prediction market address is missing";
+    }
+
+    return (
+      actionError ||
+      (marketQuery.error ? "Unable to load market data" : null) ||
+      (sharePriceTeamAQuery.error ? "Unable to load live odds" : null)
+    );
+  }, [actionError, contractAddress, marketQuery.error, sharePriceTeamAQuery.error]);
+
+  const isOwner = ownerAddress && address ? ownerAddress.toLowerCase() === address.toLowerCase() : false;
+
   return {
+    matchTitle,
+    matchStartTime,
     teamAName,
     teamBName,
     odds,
     formattedOdds,
-    isStreaming,
-    isLoading,
+    liquidity: liquidityFormatted,
+    isStreaming: marketStatus === "Active",
+    marketStatus,
+    winningOutcome,
     lastUpdated,
-    error,
+    userShares,
+    claimablePayout,
+    isOwner,
     placeBet,
+    sellPosition,
+    resolveMarket,
+    claimWinnings,
+    isBetting: buyShares.isPending,
+    isSelling: sellShares.isPending,
+    isResolving: resolveMarketMutation.isPending,
+    isClaiming: claimWinningsMutation.isPending,
+    error: combinedError,
   };
 }

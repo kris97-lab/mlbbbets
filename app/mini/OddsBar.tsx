@@ -4,8 +4,12 @@ import { useMemo, type CSSProperties } from "react";
 import styles from "./mini.module.css";
 
 export type OddsBarProps = {
+  matchTitle: string;
+  matchStartTime: Date | null;
   teamAName: string;
   teamBName: string;
+  marketStatus: string;
+  liquidity: string | null;
   percentages: {
     teamA: number;
     teamB: number;
@@ -19,7 +23,7 @@ export type OddsBarProps = {
 };
 
 const formatTimestamp = (timestamp: Date | null) => {
-  if (!timestamp) return "Awaiting market open";
+  if (!timestamp) return "Awaiting market data";
 
   const diffMs = Date.now() - timestamp.getTime();
   const seconds = Math.round(diffMs / 1000);
@@ -39,9 +43,26 @@ const formatTimestamp = (timestamp: Date | null) => {
   return rtf.format(-hours, "hour");
 };
 
+const formatStartTime = (startTime: Date | null) => {
+  if (!startTime) {
+    return "";
+  }
+
+  return startTime.toLocaleString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    day: "numeric",
+  });
+};
+
 export function OddsBar({
+  matchTitle,
+  matchStartTime,
   teamAName,
   teamBName,
+  marketStatus,
+  liquidity,
   percentages,
   multipliers,
   isStreaming,
@@ -52,17 +73,19 @@ export function OddsBar({
     () => ({ "--fill-width": fillWidth } as CSSProperties),
     [fillWidth]
   );
-  const statusLabel = isStreaming ? "Live odds" : "Simulated";
+  const statusLabel = isStreaming ? "Live odds" : "Snapshot";
+  const startLabel = formatStartTime(matchStartTime);
 
   return (
     <section className={styles.oddsContainer} aria-live="polite">
       <header className={styles.teamsHeading}>
-        <strong>
-          {teamAName} vs {teamBName}
-        </strong>
-        <span className={styles.statusPill}>
+        <div className={styles.oddsHeadingText}>
+          <strong>{matchTitle}</strong>
+          {startLabel ? <span className={styles.matchStart}>Starts {startLabel}</span> : null}
+        </div>
+        <span className={styles.statusPill} data-status={marketStatus.toLowerCase()}>
           <span className={styles.statusDot} />
-          {statusLabel}
+          {marketStatus}
         </span>
       </header>
 
@@ -86,8 +109,13 @@ export function OddsBar({
           {teamAName} {multipliers.teamA !== null ? multipliers.teamA.toFixed(2) : "--"}x · {teamBName}{" "}
           {multipliers.teamB !== null ? multipliers.teamB.toFixed(2) : "--"}x
         </span>
-        <span>{formatTimestamp(lastUpdated)}</span>
+        <span>{statusLabel}</span>
       </footer>
+
+      <div className={styles.marketMeta}>
+        <span>Liquidity {liquidity ? `${Number(liquidity).toFixed(2)} ETH` : "--"}</span>
+        <span>Updated {formatTimestamp(lastUpdated)}</span>
+      </div>
     </section>
   );
 }

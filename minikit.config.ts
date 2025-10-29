@@ -1,7 +1,7 @@
 const DEFAULT_ROOT_URL =
   process.env.NODE_ENV === "development"
     ? "http://localhost:3000"
-    : "https://mlbbbets-git-codex-implement-mini-a-28a7b9-kris97-labs-projects.vercel.app";
+    : "https://mlbbbets.vercel.app";
 
 const ROOT_URL =
   process.env.NEXT_PUBLIC_URL ||
@@ -40,8 +40,7 @@ export const minikitConfig = {
     ogDescription:
       "Tap into the Mobile Legends stream, follow the market, and stake on every momentum swing.",
     ogImageUrl: `${ROOT_URL}/blue-hero.png`,
-    canonicalDomain:
-      "mlbbbets-git-codex-implement-mini-a-28a7b9-kris97-labs-projects.vercel.app",
+    canonicalDomain: "mlbbbets.vercel.app",
   },
 } as const;
 

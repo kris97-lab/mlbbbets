@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import styles from "./mini.module.css";
 
 export type OddsBarProps = {
@@ -48,6 +48,10 @@ export function OddsBar({
   lastUpdated,
 }: OddsBarProps) {
   const fillWidth = useMemo(() => `${percentages.teamA}%`, [percentages.teamA]);
+  const fillStyle = useMemo(
+    () => ({ "--fill-width": fillWidth } as CSSProperties),
+    [fillWidth]
+  );
   const statusLabel = isStreaming ? "Live odds" : "Simulated";
 
   return (
@@ -68,8 +72,8 @@ export function OddsBar({
       </div>
 
       <div className={styles.progressBar}>
-        <div className={styles.progressFill} style={{ ["--fill-width" as const]: fillWidth }} />
-        <div className={styles.progressMarker} style={{ ["--fill-width" as const]: fillWidth }} />
+        <div className={styles.progressFill} style={fillStyle} />
+        <div className={styles.progressMarker} style={fillStyle} />
       </div>
 
       <div className={styles.progressPercentages}>

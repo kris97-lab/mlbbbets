@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import styles from "./mini.module.css";
 
 type LiveStreamProps = {
@@ -47,6 +48,7 @@ export function LiveStream({
   subtitle = DEFAULT_SUBTITLE,
 }: LiveStreamProps) {
   const streamSrc = buildStreamSrc({ platform, youtubeId, twitchChannel, iframeSrc });
+  const [isMetaVisible, setIsMetaVisible] = useState(true);
 
   return (
     <section className={styles.streamContainer} aria-label="Live stream">
@@ -60,10 +62,22 @@ export function LiveStream({
 
       <div className={styles.streamOverlay} />
       <span className={styles.streamBadge}>Live</span>
-      <div className={styles.streamMeta}>
-        <p className={styles.streamTitle}>{title}</p>
-        <p className={styles.streamSubtitle}>{subtitle}</p>
-      </div>
+      {isMetaVisible ? (
+        <div className={styles.streamMeta}>
+          <div className={styles.streamMetaText}>
+            <p className={styles.streamTitle}>{title}</p>
+            <p className={styles.streamSubtitle}>{subtitle}</p>
+          </div>
+          <button
+            type="button"
+            className={styles.streamMetaClose}
+            aria-label="Hide stream description"
+            onClick={() => setIsMetaVisible(false)}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

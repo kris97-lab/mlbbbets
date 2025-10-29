@@ -1,7 +1,10 @@
 "use client";
 
-import MiniAppPage from "./mini/page";
+import MiniApp from "./mini/MiniApp";
+
+export const revalidate = 0;
+export const dynamic = "force-dynamic";
 
 export default function Home() {
-  return <MiniAppPage />;
+  return <MiniApp />;
 }

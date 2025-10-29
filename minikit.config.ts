@@ -22,7 +22,7 @@ export const minikitConfig = {
     iconUrl: `${ROOT_URL}/blue-icon.png`,
     splashImageUrl: `${ROOT_URL}/blue-hero.png`,
     splashBackgroundColor: "#000000",
-    homeUrl: ROOT_URL,
+    homeUrl: `${ROOT_URL}/mini`,
     webhookUrl: `${ROOT_URL}/api/webhook`,
     primaryCategory: "social",
     tags: ["marketing", "ads", "quickstart", "waitlist"],
